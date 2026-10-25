@@ -1,0 +1,9 @@
+[package]
+name = "kkc-dict"
+version = "0.1.0"
+edition = "2021"
+description = "The binary dictionary format of Mutelink's kana-kanji conversion (read and write)"
+license = "MIT"
+publish = false
+
+[dependencies]

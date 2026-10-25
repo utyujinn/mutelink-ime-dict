@@ -1,0 +1,10 @@
+[package]
+name = "builder"
+version = "0.1.0"
+edition = "2021"
+description = "Builds Mutelink's kana-kanji dictionary file from Mozc's open-source dictionary"
+license = "MIT"
+publish = false
+
+[dependencies]
+kkc-dict = { path = "../kkc-dict" }
