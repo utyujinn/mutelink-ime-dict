@@ -1,6 +1,6 @@
 # mutelink-ime-dict
 
-The dictionary of [Mutelink](https://github.com/utyujinn/Mutelink)'s offline kana-kanji conversion, and the tool that builds it.
+The dictionary of Mutelink (a desktop app for talking in VRChat without one's own voice)'s offline kana-kanji conversion, and the tool that builds it.
 
 - `kkc-dict/`: the binary dictionary format (reading and writing). Mutelink's conversion engine uses it as a git dependency.
 - `builder/`: builds `mutelink-ime-dict.bin` from Mozc's open-source dictionary (`src/data/dictionary_oss`) and the extra words in `extra/`.
