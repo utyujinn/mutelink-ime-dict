@@ -10,5 +10,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "builder-zh"
+version = "0.1.0"
+dependencies = [
+ "pinyin-dict",
+]
+
+[[package]]
 name = "kkc-dict"
+version = "0.1.0"
+
+[[package]]
+name = "pinyin-dict"
 version = "0.1.0"

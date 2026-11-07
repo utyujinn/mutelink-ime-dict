@@ -1,5 +1,5 @@
 [workspace]
-members = ["kkc-dict", "builder"]
+members = ["kkc-dict", "builder", "pinyin-dict", "builder-zh"]
 resolver = "2"
 
 [profile.release]

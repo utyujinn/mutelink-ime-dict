@@ -1,0 +1,10 @@
+[package]
+name = "builder-zh"
+version = "0.1.0"
+edition = "2021"
+description = "Builds Mutelink's pinyin dictionary file from rime-essay, pinyin-data and phrase-pinyin-data"
+license = "MIT"
+publish = false
+
+[dependencies]
+pinyin-dict = { path = "../pinyin-dict" }
