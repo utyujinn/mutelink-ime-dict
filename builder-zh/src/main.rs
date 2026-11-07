@@ -1,6 +1,10 @@
 //! Builds `mutelink-pinyin-dict.bin` from the files that `sources/fetch-zh.ps1` puts in `work/zh` (and checks):
 //!
-//!   cargo run -p builder-zh --release -- <zh data dir> <out file> <meta text>
+//!   cargo run -p builder-zh --release -- <zh data dir> <out file> <meta text> [hant]
+//!
+//! With `hant` the words stay in the traditional characters of essay.txt, for the traditional-character keyboard, with the writing of Taiwan's standard (OpenCC's
+//! `TWVariants.txt`: 裏 -> 裡, 着 -> 著, ...; the words themselves are not changed, so 網絡 stays 網絡); the readings of a word are looked
+//! up through its simplified form (phrase-pinyin-data's words are simplified), and the characters that exist only in simplified writing are not added.
 //!
 //! - Words and frequencies: rime-essay's `essay.txt` (traditional characters), turned into simplified characters with OpenCC's `TSPhrases.txt` and
 //!   `TSCharacters.txt` (the longest phrase first, then character by character).
@@ -16,15 +20,17 @@ use std::fs;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 4 {
-        eprintln!("usage: builder-zh <zh data dir> <out file> <meta text>");
+    if args.len() != 4 && !(args.len() == 5 && args[4] == "hant") {
+        eprintln!("usage: builder-zh <zh data dir> <out file> <meta text> [hant]");
         std::process::exit(2);
     }
     let (dir, out, meta) = (&args[1], &args[2], &args[3]);
+    let hant = args.len() == 5;
     let read = |name: &str| fs::read_to_string(format!("{dir}/{name}")).unwrap_or_else(|e| panic!("{name}: {e}"));
 
     let phrases = opencc(&read("TSPhrases.txt"));
     let characters = opencc(&read("TSCharacters.txt"));
+    let tw_variants = if hant { opencc(&read("TWVariants.txt")) } else { BTreeMap::new() };
     let longest_phrase = phrases.keys().map(|k| k.chars().count()).max().expect("OpenCC phrases");
     let to_simplified = |word: &str| -> String {
         let chars: Vec<char> = word.chars().collect();
@@ -52,6 +58,9 @@ fn main() {
         out
     };
 
+    // The characters that only the simplified writing has (what TSCharacters.txt turns characters into, and that it does not turn into anything itself).
+    let simplified_only: BTreeSet<char> = characters.values().flat_map(|value| value.chars()).filter(|c| !characters.contains_key(&c.to_string())).collect();
+
     // essay.txt: word <TAB> weight; the same simplified word from several traditional ones adds up.
     let mut freq: BTreeMap<String, u64> = BTreeMap::new();
     for line in read("essay.txt").lines() {
@@ -61,7 +70,7 @@ fn main() {
         let mut fields = line.split('\t');
         let (Some(word), Some(weight)) = (fields.next(), fields.next()) else { continue };
         let Ok(weight) = weight.trim().parse::<u64>() else { continue };
-        let word = to_simplified(word);
+        let word = if hant { word.chars().map(|c| tw_variants.get(&c.to_string()).cloned().unwrap_or_else(|| c.to_string())).collect() } else { to_simplified(word) };
         if word.chars().all(is_ideograph) {
             *freq.entry(word).or_insert(0) += weight;
         }
@@ -114,7 +123,7 @@ fn main() {
                     }
                 }
             }
-        } else if let Some(keys) = phrase_readings.get(word) {
+        } else if let Some(keys) = phrase_readings.get(&if hant { to_simplified(word) } else { word.clone() }) {
             for key in keys {
                 add(key.clone(), word, *weight);
             }
@@ -124,7 +133,7 @@ fn main() {
     }
     // A character that essay has no weight for still has to be typable.
     for (ch, readings) in &char_readings {
-        if is_ideograph(*ch) && !freq.contains_key(&ch.to_string()) {
+        if is_ideograph(*ch) && !freq.contains_key(&ch.to_string()) && !(hant && simplified_only.contains(ch)) {
             for reading in readings.iter().collect::<BTreeSet<_>>() {
                 add(reading.clone(), &ch.to_string(), 1);
             }

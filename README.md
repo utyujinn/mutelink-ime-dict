@@ -15,14 +15,14 @@ The dictionary of Mutelink (a desktop app for talking in VRChat without one's ow
 cargo run -p builder --release -- work/mozc extra/vrchat.tsv work/mutelink-ime-dict.bin "Mozc <commit>"
 ```
 
-The same input gives the same bytes. Releases carry `mutelink-ime-dict-v1.zip` (the `.bin`, `LICENSES/` and `NOTICE.md`) and `SHA256SUMS`.
+The same input gives the same bytes. Releases carry `mutelink-ime-dict-v1.zip` (the `.bin`, `LICENSES/` and `NOTICE.md`) and `SHA256SUMS`. Release `zh-hant-dict-v1` carries `mutelink-pinyin-hant-v1.zip`, the unchanged `zh-hant-t-essay-bgw-compact.gram` and `SHA256SUMS`.
 
 ## Pinyin (Chinese)
 
 The dictionary of the pinyin conversion, built from rime-essay (words and frequencies), OpenCC (traditional to simplified), pinyin-data and phrase-pinyin-data (readings):
 
 - `pinyin-dict/`: the binary dictionary format (reading and writing). Mutelink's pinyin conversion uses it as a git dependency.
-- `builder-zh/`: builds `mutelink-pinyin-dict.bin`.
+- `builder-zh/`: builds `mutelink-pinyin-dict.bin` (simplified characters), or with `hant` the traditional-character one (Taiwan's standard forms).
 - `sources/SOURCES-zh.md`, `sources/fetch-zh.ps1`: which commits the data comes from, and a script that fetches those files and checks their SHA-256. It also fetches the optional
   word-bigram language model (octagram, shipped unchanged).
 - `NOTICE-zh.md`, `LICENSES/zh/`: the licences. The dictionary file contains LGPL-3.0 data (rime-essay), so it is distributed under the LGPL-3.0, as a separate file.
@@ -31,6 +31,9 @@ The dictionary of the pinyin conversion, built from rime-essay (words and freque
 ./sources/fetch-zh.ps1              # downloads the pinyin data into ./work/zh and the octagram model into ./work/zh-gram, and checks them
 cargo run -p builder-zh --release -- work/zh work/mutelink-pinyin-dict.bin "<meta text>"
 python release/make_zip_zh.py work/mutelink-pinyin-dict.bin zh-v1 work/release-zh
+# the traditional-character dictionary and its model (release zh-hant-dict-v1):
+cargo run -p builder-zh --release -- work/zh work/mutelink-pinyin-hant-dict.bin "<meta text>" hant
+python release/make_zip_zh.py work/mutelink-pinyin-hant-dict.bin hant-v1 work/release-zh-hant hant
 ```
 
 Releases (tag `zh-dict-v1`) carry `mutelink-pinyin-zh-v1.zip` (the `.bin`, `LICENSES/zh/` and `NOTICE-zh.md`), the unchanged `zh-hans-t-essay-bgw-compact.gram`, and `SHA256SUMS`.

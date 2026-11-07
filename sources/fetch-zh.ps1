@@ -7,6 +7,7 @@ $files = @(
   @{ Name = "essay-LICENSE.txt";            Repo = "rime/rime-essay";                Commit = "054920de4f54c9e5994276a96a4fc2a35cb51aa3"; Path = "LICENSE";                                  Sha = "da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768" },
   @{ Name = "TSCharacters.txt";             Repo = "BYVoid/OpenCC";                  Commit = "fae2a0a911c30764e669a7d8b0591cd8e852934a"; Path = "data/dictionary/TSCharacters.txt";         Sha = "9ff46a7d30e5765375eb13d33f2b03a34d298913caf2b120380679f33ae1642d" },
   @{ Name = "TSPhrases.txt";                Repo = "BYVoid/OpenCC";                  Commit = "fae2a0a911c30764e669a7d8b0591cd8e852934a"; Path = "data/dictionary/TSPhrases.txt";            Sha = "1b1e60a3d50492bc088bcd4372152570b5f0ccbe2ded0b66c90b6b8eeb5f849f" },
+  @{ Name = "TWVariants.txt";               Repo = "BYVoid/OpenCC";                  Commit = "fae2a0a911c30764e669a7d8b0591cd8e852934a"; Path = "data/dictionary/TWVariants.txt";            Sha = "245b94eb5842957e735dd44b7e7d4ff469a3643126cc8fa511adda5281e9cb86" },
   @{ Name = "OpenCC-LICENSE.txt";           Repo = "BYVoid/OpenCC";                  Commit = "fae2a0a911c30764e669a7d8b0591cd8e852934a"; Path = "LICENSE";                                  Sha = "b534e465949558eec2597b04f5092b5e161236a68dfbfd04d547592ac3964308" },
   @{ Name = "char-pinyin.txt";              Repo = "mozillazg/pinyin-data";          Commit = "fe29ad32bdf352b31a02b9936e537f575432e9a6"; Path = "pinyin.txt";                               Sha = "2342a6f98c85dbc3c8d26aef31744876a36326c6466e51e9a0f16898c36c2011" },
   @{ Name = "pinyin-data-LICENSE.txt";      Repo = "mozillazg/pinyin-data";          Commit = "fe29ad32bdf352b31a02b9936e537f575432e9a6"; Path = "LICENSE";                                  Sha = "9c048697be2502a16e8bcb282d5d465a07295b2def0ffb05a269c5d39dbe1586" },
@@ -29,6 +30,7 @@ $gram = Join-Path $PSScriptRoot "..\work\zh-gram"
 New-Item -ItemType Directory -Force $gram | Out-Null
 $grams = @(
   @{ Name = "zh-hans-t-essay-bgw-compact.gram"; Url = "https://github.com/lotem/rime-octagram-data/releases/download/20260712/zh-hans-t-essay-bgw-compact.gram"; Sha = "d3cb2438c1fdcd6a855dd6ca8f5c1060a29273c6b64c2c2c69af67cd71b6aa7e" },
+  @{ Name = "zh-hant-t-essay-bgw-compact.gram"; Url = "https://github.com/lotem/rime-octagram-data/releases/download/20260712/zh-hant-t-essay-bgw-compact.gram"; Sha = "0488ebd6688f900a39200f2b794f2f99bcbf1e8fc27280ae4a2324b08b1559c1" },
   @{ Name = "octagram-data-LICENSE.txt"; Url = "https://raw.githubusercontent.com/lotem/rime-octagram-data/f8ce3b534733e489a8470a7c2adf5a154e8ea069/LICENSE"; Sha = "da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768" }
 )
 foreach ($f in $grams) {
