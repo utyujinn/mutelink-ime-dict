@@ -5,13 +5,15 @@
 //!
 //! ```text
 //! header   magic "MPYD", format version, key count, entry count, key bytes, word bytes, longest key (bytes), total frequency (low, high),
-//!          meta length (u32 each), then the meta text (where the data came from)
+//!          meta length, tone bytes (u32 each), then the meta text (where the data came from)
 //! key_offsets (key count + 1) x u32    into key bytes
 //! key_first   (key count + 1) x u32    the first entry of each key (entries of one key are in a row, most frequent first)
 //! key bytes
 //! entry frequency   entry count x u32
 //! word_offsets (entry count + 1) x u32    into word bytes
 //! word bytes
+//! tone_offsets (entry count + 1) x u32    into tone bytes
+//! tone bytes   one byte for each character of each word (see `Entry::tones`)
 //! ```
 //!
 //! Keys are sorted by their bytes, so a lookup is a binary search over `key_offsets`.
@@ -20,8 +22,8 @@ use std::ops::Range;
 
 const MAGIC: &[u8; 4] = b"MPYD";
 /// Raised whenever the layout above changes; the app asks the user to download the dictionary again when it meets one it does not know.
-pub const FORMAT_VERSION: u32 = 1;
-const HEADER_FIELDS: usize = 9;
+pub const FORMAT_VERSION: u32 = 2;
+const HEADER_FIELDS: usize = 10;
 
 /// An entry as the builder gets it.
 #[derive(Clone, Debug)]
@@ -29,6 +31,9 @@ pub struct EntryData {
     pub key: String,
     pub word: String,
     pub freq: u32,
+    /// For each character of the word, the tones it is read with under this key, as bits: bit 0 the neutral tone, bits 1 to 4 the four tones (a character with
+    /// two readings of one key, 为 wéi and wèi, has two bits). One byte for each character of `word`.
+    pub tones: Vec<u8>,
 }
 
 /// Everything the builder has gathered.
@@ -42,20 +47,32 @@ pub struct DictionaryData {
 pub struct Entry<'a> {
     pub word: &'a str,
     pub freq: u32,
+    /// The tone bits of each character (see `EntryData::tones`).
+    pub tones: &'a [u8],
 }
 
-/// Writes the file. The entries are put in order (the same word under the same key given twice is kept once, with the higher frequency), so that the
-/// same data always gives the same bytes.
+/// Writes the file. The entries are put in order (the same word under the same key given twice is kept once, with the higher frequency and the tones of both), so
+/// that the same data always gives the same bytes.
 pub fn write(data: &DictionaryData) -> Vec<u8> {
     let mut entries = data.entries.clone();
     entries.sort_by(|a, b| a.key.as_bytes().cmp(b.key.as_bytes()).then(b.freq.cmp(&a.freq)).then(a.word.cmp(&b.word)));
-    entries.dedup_by(|b, a| a.key == b.key && a.word == b.word);
+    entries.dedup_by(|b, a| {
+        let same = a.key == b.key && a.word == b.word;
+        if same {
+            for (kept, other) in a.tones.iter_mut().zip(&b.tones) {
+                *kept |= other;
+            }
+        }
+        same
+    });
 
     let mut key_offsets: Vec<u32> = Vec::new();
     let mut key_first: Vec<u32> = Vec::new();
     let mut key_bytes: Vec<u8> = Vec::new();
     let mut word_offsets: Vec<u32> = vec![0];
     let mut word_bytes: Vec<u8> = Vec::new();
+    let mut tone_offsets: Vec<u32> = vec![0];
+    let mut tone_bytes: Vec<u8> = Vec::new();
     let mut longest = 0usize;
     let mut total: u64 = 0;
     for (i, entry) in entries.iter().enumerate() {
@@ -67,6 +84,9 @@ pub fn write(data: &DictionaryData) -> Vec<u8> {
         }
         word_bytes.extend_from_slice(entry.word.as_bytes());
         word_offsets.push(word_bytes.len() as u32);
+        assert_eq!(entry.tones.len(), entry.word.chars().count(), "a tone byte for each character of {}", entry.word);
+        tone_bytes.extend_from_slice(&entry.tones);
+        tone_offsets.push(tone_bytes.len() as u32);
         total += entry.freq as u64;
     }
     key_offsets.push(key_bytes.len() as u32);
@@ -85,6 +105,7 @@ pub fn write(data: &DictionaryData) -> Vec<u8> {
         total as u32,
         (total >> 32) as u32,
         data.meta.len() as u32,
+        tone_bytes.len() as u32,
     ] {
         out.extend_from_slice(&field.to_le_bytes());
     }
@@ -100,6 +121,10 @@ pub fn write(data: &DictionaryData) -> Vec<u8> {
         out.extend_from_slice(&value.to_le_bytes());
     }
     out.extend_from_slice(&word_bytes);
+    for value in &tone_offsets {
+        out.extend_from_slice(&value.to_le_bytes());
+    }
+    out.extend_from_slice(&tone_bytes);
     out
 }
 
@@ -117,6 +142,8 @@ pub struct Dictionary {
     entry_freq: usize,
     word_offsets: usize,
     word_bytes: usize,
+    tone_offsets: usize,
+    tone_bytes: usize,
 }
 
 impl Dictionary {
@@ -132,6 +159,7 @@ impl Dictionary {
         let (key_count, entry_count, key_len, word_len, longest_key) = (field(1), field(2), field(3), field(4), field(5));
         let total_freq = field(6) as u64 | (field(7) as u64) << 32;
         let meta_len = field(8);
+        let tone_len = field(9);
         let meta_start = 4 + HEADER_FIELDS * 4;
         let key_offsets = meta_start + meta_len;
         let key_first = key_offsets + (key_count + 1) * 4;
@@ -139,10 +167,12 @@ impl Dictionary {
         let entry_freq = key_bytes + key_len;
         let word_offsets = entry_freq + entry_count * 4;
         let word_bytes = word_offsets + (entry_count + 1) * 4;
-        if bytes.len() != word_bytes + word_len {
+        let tone_offsets = word_bytes + word_len;
+        let tone_bytes = tone_offsets + (entry_count + 1) * 4;
+        if bytes.len() != tone_bytes + tone_len {
             return Err("the dictionary file is cut off or damaged".to_string());
         }
-        Ok(Dictionary { bytes, key_count, entry_count, longest_key, total_freq, meta: meta_start..meta_start + meta_len, key_offsets, key_first, key_bytes, entry_freq, word_offsets, word_bytes })
+        Ok(Dictionary { bytes, key_count, entry_count, longest_key, total_freq, meta: meta_start..meta_start + meta_len, key_offsets, key_first, key_bytes, entry_freq, word_offsets, word_bytes, tone_offsets, tone_bytes })
     }
 
     fn u32_at(&self, base: usize, index: usize) -> usize {
@@ -193,6 +223,7 @@ impl Dictionary {
             // The builder wrote these bytes from strings, so they are text.
             word: std::str::from_utf8(word).expect("the word bytes are text"),
             freq: self.u32_at(self.entry_freq, index) as u32,
+            tones: &self.bytes[self.tone_bytes + self.u32_at(self.tone_offsets, index)..self.tone_bytes + self.u32_at(self.tone_offsets, index + 1)],
         }
     }
 }
@@ -202,8 +233,12 @@ mod tests {
     use super::*;
 
     fn sample() -> DictionaryData {
-        let entry = |key: &str, freq: u32, word: &str| EntryData { key: key.to_string(), word: word.to_string(), freq };
-        DictionaryData { entries: vec![entry("nihao", 300, "你好"), entry("ni", 900, "你"), entry("ni", 100, "尼"), entry("hao", 800, "好"), entry("ni", 900, "你")], meta: "test".to_string() }
+        // Tones: 你 is 3rd, 尼 2nd, 好 3rd (and 4th, hào), 你好 3rd and 3rd.
+        let entry = |key: &str, freq: u32, word: &str, tones: &[u8]| EntryData { key: key.to_string(), word: word.to_string(), freq, tones: tones.to_vec() };
+        DictionaryData {
+            entries: vec![entry("nihao", 300, "你好", &[0b1000, 0b1000]), entry("ni", 900, "你", &[0b1000]), entry("ni", 100, "尼", &[0b100]), entry("hao", 800, "好", &[0b1000]), entry("ni", 900, "你", &[0b100])],
+            meta: "test".to_string(),
+        }
     }
 
     #[test]
@@ -222,6 +257,10 @@ mod tests {
         assert_eq!(dictionary.entry(range.start + 1).word, "尼");
         assert_eq!(dictionary.entry(range.start + 1).freq, 100);
         assert_eq!(dictionary.lookup("n"), 0..0);
+        // The tones are kept with the word, and the two readings of the same word under one key are one entry with both.
+        assert_eq!(dictionary.entry(range.start).tones, &[0b1100]);
+        assert_eq!(dictionary.entry(range.start + 1).tones, &[0b100]);
+        assert_eq!(dictionary.entry(dictionary.lookup("nihao").start).tones, &[0b1000, 0b1000]);
     }
 
     #[test]

@@ -1,8 +1,8 @@
 """Packs the pinyin dictionary with the licence texts into mutelink-pinyin-<version>.zip and writes SHA256SUMS (same input, same bytes).
 The optional language model (the octagram .gram) is not packed: it is released as it is, next to the zip, with its licence.
 
-  python release/make_zip_zh.py work/mutelink-pinyin-dict.bin v1 work/release-zh
-  python release/make_zip_zh.py work/mutelink-pinyin-hant-dict.bin hant-v1 work/release-zh-hant hant   (the traditional-character dictionary and its model)
+  python release/make_zip_zh.py work/mutelink-pinyin-dict.bin zh-v2 work/release-zh-v2
+  python release/make_zip_zh.py work/mutelink-pinyin-hant-dict.bin hant-v2 work/release-zh-hant-v2 hant   (the traditional-character dictionary and its model)
 """
 import hashlib
 import shutil
@@ -14,7 +14,7 @@ binary, version, out = Path(sys.argv[1]), sys.argv[2], Path(sys.argv[3])
 script = "hant" if len(sys.argv) > 4 and sys.argv[4] == "hant" else "hans"
 root = Path(__file__).resolve().parent.parent
 out.mkdir(parents=True, exist_ok=True)
-files = [("mutelink-pinyin-dict.bin", binary), ("NOTICE-zh.md", root / "NOTICE-zh.md")] + [
+files = [("mutelink-pinyin-dict-v2.bin", binary), ("NOTICE-zh.md", root / "NOTICE-zh.md")] + [
     (f"LICENSES/zh/{p.name}", p) for p in sorted((root / "LICENSES" / "zh").iterdir())
 ]
 archive = out / f"mutelink-pinyin-{version}.zip"

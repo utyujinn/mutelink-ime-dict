@@ -10,7 +10,8 @@
 //!   `TSCharacters.txt` (the longest phrase first, then character by character).
 //! - Readings: pinyin-data's `pinyin.txt` (every reading of a character, the first one the commonest) and phrase-pinyin-data's `pinyin.txt` (the readings
 //!   of words). A word that is in no phrase file is read with the first reading of each of its characters.
-//! - A key is the toneless pinyin of a word, syllables joined, `ü` as `v` (pinyin-dict's documentation says why).
+//! - A key is the toneless pinyin of a word, syllables joined, `ü` as `v` (pinyin-dict's documentation says why). The tones the word is read with go into the
+//!   entry (one byte for each character, the readings of the same key added up), so that a typed tone can narrow the candidates.
 //!
 //! The same input gives the same bytes (pinyin_dict::write puts everything in order), so a release can be rebuilt and compared.
 
@@ -77,7 +78,7 @@ fn main() {
     }
 
     // pinyin-data: "U+4E2D: zhōng,zhòng  # 中"
-    let mut char_readings: BTreeMap<char, Vec<String>> = BTreeMap::new();
+    let mut char_readings: BTreeMap<char, Vec<(String, u8)>> = BTreeMap::new();
     for line in read("char-pinyin.txt").lines() {
         if line.starts_with('#') {
             continue;
@@ -85,30 +86,34 @@ fn main() {
         let Some((code, rest)) = line.split_once(": ") else { continue };
         let Some(hex) = code.strip_prefix("U+") else { continue };
         let ch = char::from_u32(u32::from_str_radix(hex, 16).expect("a code point")).expect("a character");
-        let readings: Vec<String> = rest.split('#').next().expect("a reading list").split(',').filter_map(|r| toneless(r.trim())).collect();
+        let readings: Vec<(String, u8)> = rest.split('#').next().expect("a reading list").split(',').filter_map(|r| Some((toneless(r.trim())?, tone_bit(r.trim())))).collect();
         if !readings.is_empty() {
             char_readings.insert(ch, readings);
         }
     }
 
     // phrase-pinyin-data: "中国: zhōng guó", one reading a line (a word with several readings is on several lines).
-    let mut phrase_readings: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    // The word -> its keys -> the tone bits of each character.
+    let mut phrase_readings: BTreeMap<String, BTreeMap<String, Vec<u8>>> = BTreeMap::new();
     for line in read("phrase-pinyin.txt").lines() {
         if line.starts_with('#') {
             continue;
         }
         let Some((word, reading)) = line.split('#').next().expect("a line").split_once(':') else { continue };
-        let syllables: Option<Vec<String>> = reading.split_whitespace().map(toneless).collect();
+        let syllables: Option<Vec<(String, u8)>> = reading.split_whitespace().map(|syllable| Some((toneless(syllable)?, tone_bit(syllable)))).collect();
         if let Some(syllables) = syllables {
             if syllables.len() == word.trim().chars().count() {
-                phrase_readings.entry(word.trim().to_string()).or_default().insert(syllables.concat());
+                let tones = phrase_readings.entry(word.trim().to_string()).or_default().entry(syllables.iter().map(|(key, _)| key.as_str()).collect::<String>()).or_insert_with(|| vec![0; syllables.len()]);
+                for (tone, (_, bit)) in tones.iter_mut().zip(&syllables) {
+                    *tone |= bit;
+                }
             }
         }
     }
 
     let mut entries: Vec<EntryData> = Vec::new();
-    let mut add = |key: String, word: &str, weight: u64| {
-        entries.push(EntryData { key, word: word.to_string(), freq: weight.clamp(1, u32::MAX as u64) as u32 });
+    let mut add = |key: String, word: &str, weight: u64, tones: Vec<u8>| {
+        entries.push(EntryData { key, word: word.to_string(), freq: weight.clamp(1, u32::MAX as u64) as u32, tones });
     };
     for (word, weight) in &freq {
         let length = word.chars().count();
@@ -116,26 +121,23 @@ fn main() {
             // A character: its commonest reading with the full weight, the others with a twentieth of it.
             let ch = word.chars().next().expect("a character");
             if let Some(readings) = char_readings.get(&ch) {
-                let mut seen = BTreeSet::new();
-                for (i, reading) in readings.iter().enumerate() {
-                    if seen.insert(reading) {
-                        add(reading.clone(), word, if i == 0 { *weight } else { (*weight / 20).max(1) });
-                    }
+                for (i, (key, tones)) in by_key(readings).into_iter().enumerate() {
+                    add(key, word, if i == 0 { *weight } else { (*weight / 20).max(1) }, vec![tones]);
                 }
             }
         } else if let Some(keys) = phrase_readings.get(&if hant { to_simplified(word) } else { word.clone() }) {
-            for key in keys {
-                add(key.clone(), word, *weight);
+            for (key, tones) in keys {
+                add(key.clone(), word, *weight, tones.clone());
             }
-        } else if let Some(key) = word.chars().map(|c| char_readings.get(&c).map(|r| r[0].clone())).collect::<Option<Vec<String>>>() {
-            add(key.concat(), word, *weight);
+        } else if let Some(first) = word.chars().map(|c| char_readings.get(&c).map(|r| r[0].clone())).collect::<Option<Vec<(String, u8)>>>() {
+            add(first.iter().map(|(key, _)| key.as_str()).collect(), word, *weight, first.iter().map(|(_, bit)| *bit).collect());
         }
     }
     // A character that essay has no weight for still has to be typable.
     for (ch, readings) in &char_readings {
         if is_ideograph(*ch) && !freq.contains_key(&ch.to_string()) && !(hant && simplified_only.contains(ch)) {
-            for reading in readings.iter().collect::<BTreeSet<_>>() {
-                add(reading.clone(), &ch.to_string(), 1);
+            for (key, tones) in by_key(readings) {
+                add(key, &ch.to_string(), 1, vec![tones]);
             }
         }
     }
@@ -144,6 +146,33 @@ fn main() {
     let bytes = pinyin_dict::write(&DictionaryData { entries, meta: meta.clone() });
     fs::write(out, &bytes).expect("the output file");
     println!("{} entries, {} bytes -> {}", count, bytes.len(), out);
+}
+
+// The readings of a character grouped by key, in the order of their first appearance (the first is the commonest), the tone bits of the readings of one key added up.
+fn by_key(readings: &[(String, u8)]) -> Vec<(String, u8)> {
+    let mut grouped: Vec<(String, u8)> = Vec::new();
+    for (key, bit) in readings {
+        match grouped.iter_mut().find(|(seen, _)| seen == key) {
+            Some((_, tones)) => *tones |= bit,
+            None => grouped.push((key.clone(), *bit)),
+        }
+    }
+    grouped
+}
+
+// The tone of a syllable as a bit: bit 0 is the neutral tone (no mark), bits 1 to 4 the four tones (the marks, or the combining marks of "ê̄" and "ê̌").
+fn tone_bit(syllable: &str) -> u8 {
+    for c in syllable.chars() {
+        let tone = match c {
+            'ā' | 'ē' | 'ī' | 'ō' | 'ū' | 'ǖ' | '\u{304}' => 1,
+            'á' | 'é' | 'í' | 'ó' | 'ú' | 'ǘ' | 'ń' | 'ḿ' | 'ế' | '\u{301}' => 2,
+            'ǎ' | 'ě' | 'ǐ' | 'ǒ' | 'ǔ' | 'ǚ' | 'ň' | '\u{30c}' => 3,
+            'à' | 'è' | 'ì' | 'ò' | 'ù' | 'ǜ' | 'ǹ' | 'ề' | '\u{300}' => 4,
+            _ => continue,
+        };
+        return 1 << tone;
+    }
+    1
 }
 
 fn is_ideograph(c: char) -> bool {

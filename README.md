@@ -15,7 +15,7 @@ The dictionary of Mutelink (a desktop app for talking in VRChat without one's ow
 cargo run -p builder --release -- work/mozc extra/vrchat.tsv work/mutelink-ime-dict.bin "Mozc <commit>"
 ```
 
-The same input gives the same bytes. Releases carry `mutelink-ime-dict-v1.zip` (the `.bin`, `LICENSES/` and `NOTICE.md`) and `SHA256SUMS`. Release `zh-hant-dict-v1` carries `mutelink-pinyin-hant-v1.zip`, the unchanged `zh-hant-t-essay-bgw-compact.gram` and `SHA256SUMS`.
+The same input gives the same bytes. Releases carry `mutelink-ime-dict-v1.zip` (the `.bin`, `LICENSES/` and `NOTICE.md`) and `SHA256SUMS`.
 
 ## Pinyin (Chinese)
 
@@ -30,12 +30,12 @@ The dictionary of the pinyin conversion, built from rime-essay (words and freque
 ```powershell
 ./sources/fetch-zh.ps1              # downloads the pinyin data into ./work/zh and the octagram model into ./work/zh-gram, and checks them
 cargo run -p builder-zh --release -- work/zh work/mutelink-pinyin-dict.bin "<meta text>"
-python release/make_zip_zh.py work/mutelink-pinyin-dict.bin zh-v1 work/release-zh
-# the traditional-character dictionary and its model (release zh-hant-dict-v1):
+python release/make_zip_zh.py work/mutelink-pinyin-dict.bin zh-v2 work/release-zh-v2
+# the traditional-character dictionary (the models are Rime's files, in releases zh-dict-v1 and zh-hant-dict-v1):
 cargo run -p builder-zh --release -- work/zh work/mutelink-pinyin-hant-dict.bin "<meta text>" hant
-python release/make_zip_zh.py work/mutelink-pinyin-hant-dict.bin hant-v1 work/release-zh-hant hant
+python release/make_zip_zh.py work/mutelink-pinyin-hant-dict.bin hant-v2 work/release-zh-hant-v2 hant
 ```
 
-Releases (tag `zh-dict-v1`) carry `mutelink-pinyin-zh-v1.zip` (the `.bin`, `LICENSES/zh/` and `NOTICE-zh.md`), the unchanged `zh-hans-t-essay-bgw-compact.gram`, and `SHA256SUMS`.
+Release `zh-dict-v2` (the dictionary format version 2, which has the tones of the words) carries `mutelink-pinyin-zh-v2.zip` and `mutelink-pinyin-hant-v2.zip` (each the `.bin`, `LICENSES/zh/` and `NOTICE-zh.md`) and `SHA256SUMS`. The language models, Rime's files unchanged, are in `zh-dict-v1` (`zh-hans-t-essay-bgw-compact.gram`) and `zh-hant-dict-v1` (`zh-hant-t-essay-bgw-compact.gram`); `mutelink-pinyin-zh-v1.zip` and `mutelink-pinyin-hant-v1.zip` there are of format version 1.
 
 The code of this repository is MIT. The dictionary data is not: see `NOTICE.md` and `NOTICE-zh.md`.
