@@ -270,6 +270,23 @@ impl Dictionary {
         0..0
     }
 
+    /// The reading of the entry with index `index` (the entries of one reading are in a row, see `lookup`), for going through all the words: the entry itself has the writing
+    /// and the costs but not the reading, which is the key it is found by.
+    pub fn reading_of(&self, index: usize) -> &str {
+        // The last reading whose first entry is not after `index`.
+        let (mut low, mut high) = (0usize, self.reading_count);
+        while low + 1 < high {
+            let middle = (low + high) / 2;
+            if self.u32_at(self.reading_first, middle) <= index {
+                low = middle;
+            } else {
+                high = middle;
+            }
+        }
+        // The builder wrote these bytes from strings, so they are text.
+        std::str::from_utf8(self.reading_at(low)).expect("the reading bytes are text")
+    }
+
     pub fn entry(&self, index: usize) -> Entry<'_> {
         let surface = &self.bytes[self.surface_bytes + self.u32_at(self.surface_offsets, index)..self.surface_bytes + self.u32_at(self.surface_offsets, index + 1)];
         Entry {
@@ -312,6 +329,8 @@ mod tests {
         assert_eq!(dictionary.entry(range.start).surface, "京");
         assert_eq!(dictionary.entry(range.start + 1).surface, "今日");
         assert_eq!(dictionary.lookup("きょ"), 0..0);
+        // Every entry knows its reading again, in the order of the entries.
+        assert_eq!((0..dictionary.entry_count()).map(|index| dictionary.reading_of(index)).collect::<Vec<_>>(), ["あ", "きょう", "きょう"]);
         assert_eq!(dictionary.connection(2, 1), 7);
         assert_eq!(dictionary.pos_class(2), PosClass::Attached);
         assert_eq!(dictionary.unknown(), (1, 9000));
